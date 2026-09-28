@@ -1,0 +1,18 @@
+id = "kev"
+order = 30
+display_name = "Kev"
+endpoint = "http://127.0.0.1:18003/v1/systemone"
+api_model = "kev-latest"
+profiles = ["light", "full"]
+note = "Kev-0.8B on MLX."
+
+[setup]
+command = ["bash", "{root}/scripts/setup_model.sh", "kev"]
+
+[launch]
+command = ["uv", "run", "--extra", "serve", "python", "-m", "kev.serve", "--run", "jaredpalmer/kev-0.8b", "--port", "18003"]
+cwd = "{work}/repos/kev"
+
+[version]
+command = ["git", "rev-parse", "HEAD"]
+cwd = "{work}/repos/kev"

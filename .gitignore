@@ -1,0 +1,11 @@
+.bench
+results/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.DS_Store
+.env
+models/local/
+data/*.jsonl
+!data/smoke.jsonl

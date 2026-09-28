@@ -1,0 +1,6 @@
+id = "custom-choice"
+display_name = "Custom choice service"
+endpoint = "http://127.0.0.1:19001/decide"
+adapter = "examples.custom_adapter:ChoiceAdapter"
+profiles = []
+note = "Example existing HTTP service; not included in default runs."

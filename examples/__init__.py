@@ -1,0 +1,1 @@
+"""Example adapters for contributors."""

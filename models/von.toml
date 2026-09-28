@@ -1,0 +1,15 @@
+id = "von"
+order = 20
+display_name = "Von"
+endpoint = "http://127.0.0.1:18002/v1/systemone"
+profiles = ["full"]
+note = "Local checkpoint with MPS explicitly selected."
+
+[setup]
+command = ["bash", "{root}/scripts/setup_model.sh", "von"]
+
+[launch]
+command = ["{work}/envs/von/bin/von", "serve", "--host", "127.0.0.1", "--port", "18002", "--device", "mps"]
+
+[version]
+command = ["{work}/envs/von/bin/python", "-c", "import importlib.metadata as m; print(m.version('von-sdk'))"]

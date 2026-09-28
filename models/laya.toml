@@ -1,0 +1,24 @@
+id = "laya"
+order = 10
+display_name = "Laya"
+endpoint = "http://127.0.0.1:18001/v1/systemone"
+api_model = "english"
+profiles = ["light", "full"]
+note = "English checkpoint on MPS; one checkpoint resident."
+
+[setup]
+command = ["bash", "{root}/scripts/setup_model.sh", "laya"]
+
+[launch]
+command = ["{work}/envs/laya/bin/python", "-m", "laya.serve"]
+
+[launch.env]
+LAYA_HOST = "127.0.0.1"
+LAYA_PORT = "18001"
+LAYA_DEVICE = "mps"
+LAYA_PRELOAD = "1"
+LAYA_MODELS = "english"
+LAYA_MAX_LOADED = "1"
+
+[version]
+command = ["{work}/envs/laya/bin/python", "-c", "import importlib.metadata as m; print(m.version('laya'))"]

@@ -1,0 +1,18 @@
+id = "rizzo"
+order = 40
+display_name = "Rizzo Flow"
+endpoint = "http://127.0.0.1:18004/v1/systemone"
+api_model = "rizzo-latest"
+profiles = ["full"]
+note = "Rizzo Flow 4B Q4_K_M on llama.cpp Metal."
+
+[setup]
+command = ["bash", "{root}/scripts/setup_model.sh", "rizzo"]
+
+[launch]
+command = ["uv", "run", "--no-sync", "rizzo", "serve", "--size", "4b", "--quant", "q4_k_m", "--device", "metal", "--host", "127.0.0.1", "--port", "18004"]
+cwd = "{work}/repos/rizzo-flow"
+
+[version]
+command = ["git", "rev-parse", "HEAD"]
+cwd = "{work}/repos/rizzo-flow"
