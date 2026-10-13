@@ -1,0 +1,31 @@
+{
+  "versions": [
+    {
+      "version": "0.2",
+      "date": "2026-10-13",
+      "summary": "Benchmark eight additional System One models through the extended profile, with pinned native runtimes and provenance recorded in every report format.",
+      "entries": [
+        {
+          "type": "added",
+          "text": "The extended profile adds D3 Edge, Lite, Mini and Flash, Clef Flash, Liquid D1 3B and D1 Omni 600M, and JEV 9B to the original four models. The full, light, and default selections remain unchanged; all candidates use the same labeled decision dataset.",
+          "breaking": false,
+          "audience": "user",
+          "highlight": false,
+          "commits": [
+            "46ec533"
+          ]
+        },
+        {
+          "type": "added",
+          "text": "New native model runs use pinned local weight snapshots, locked Python environments, and an explicit MLX free-buffer cache budget. JSON, CSV, Markdown, and offline HTML reports distinguish configured model and runtime pins from observed backend metadata, including load and inference failures.",
+          "breaking": false,
+          "audience": "user",
+          "highlight": false,
+          "commits": [
+            "46ec533"
+          ]
+        }
+      ]
+    }
+  ]
+}
