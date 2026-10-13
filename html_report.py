@@ -1,6 +1,8 @@
 """Dependency-free, offline comparison report."""
 from __future__ import annotations
 
+import json
+
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -104,6 +106,7 @@ def _details(rows: list[dict[str, Any]]) -> str:
         items = [
             ("Runtime revision", row.get("version") or "Unavailable"),
             ("Adapter", row.get("adapter") or "Unknown"),
+            ("Configured / observed provenance", json.dumps(row.get("provenance", {}), sort_keys=True, ensure_ascii=False)),
             ("Management", "Started by benchmark" if row.get("managed") else "Existing service"),
             ("Requests", str(row.get("requests", "N/A"))),
             ("Decisions", str(row.get("decisions", "N/A"))),

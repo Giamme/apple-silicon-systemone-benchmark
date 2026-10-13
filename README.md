@@ -96,4 +96,33 @@ The default adapter uses the `/v1/systemone` wire format. A small Python adapter
 
 ## Open source and contributing
 
-This harness and its synthetic examples are Apache-2.0 licensed. Downloaded code and weights are not vendored. Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). When sharing results, disclose the dataset, hardware, runtime revisions, and failures, and avoid publishing private request or server logs.
+This harness and its synthetic examples are Apache-2.0 licensed. Model weights and full runtime distributions are not vendored. The adapted D3 formatting code retains upstream attribution; see [THIRD_PARTY.md](THIRD_PARTY.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). When sharing results, disclose the dataset, hardware, runtime revisions, and failures, and avoid publishing private request or server logs.
+
+## Extended native decision models
+
+The **extended** profile adds eight models to the original four without changing `full`, `light`, or the default selection:
+
+```bash
+./benchmark.sh setup --profile extended
+./benchmark.sh run --profile extended
+./benchmark.sh all --models d3-edge d3-lite d3-mini d3-flash clef-flash d1-3b d1-omni-600m jev-9b
+```
+
+These models use native decision readouts through a foreground loopback `/v1/systemone` bridge. The included dataset stays at 24 text cases and 72 labeled choice, boolean, and score decisions per pass. The bridge loads weights before opening its port, so startup includes model loading; cold first-request and warm HTTP latency remain separate. Warm requests retain the existing 180-second timeout.
+
+| ID | Source | Pinned artifact precision | Runtime environment |
+| --- | --- | --- | --- |
+| `d3-edge` | `vllm-sr/d3-edge` | BF16 | `d3-clef` |
+| `d3-lite` | `vllm-sr/d3-lite` | BF16 | `d3-clef` |
+| `d3-mini` | `vllm-sr/d3-mini` | BF16 | `d3-clef` |
+| `d3-flash` | `vllm-sr/d3-flash` | affine 4-bit backbone; BF16 vision; FP32 readout | `d3-clef` |
+| `clef-flash` | `Cloudflare/clef-flash` | affine 4-bit backbone; BF16 head | `d3-clef` |
+| `d1-3b` | `LiquidAI/d1-3B` | FP16 | `liquid` |
+| `d1-omni-600m` | `LiquidAI/d1-omni-600M` | FP16 | `liquid` |
+| `jev-9b` | `autotrust/JEV-9B` | NVFP4 backbone; BF16 readout; FP32 probability math | `jev` |
+
+[The catalog](runtime_catalog.py) records exact source and artifact revisions, precision, quantization, and backend selection. Each runtime has a checked-in transitive `uv.lock` under `runtimes/`, requires Python 3.12, and installs into `.bench/envs/`. Setup downloads exact artifacts into `.bench/models/`; subsequent launches load that local snapshot with Hub networking disabled. New setup uses frozen locks rather than updating packages. All eight new managed bridges set a fixed 256 MiB MLX free-buffer cache budget before model loading, leaving active allocations unchanged. This allocator soft limit can temporarily be exceeded; configured and observed policy is recorded in provenance. No precision/backend fallback or input truncation is performed; inputs that exceed a native limit fail explicitly. Clef preserves its pinned native lexicographic ordering of choice labels; the HTTP request and returned probabilities retain the original labels. JEV supports at most 16 choices and maps ordered score descriptions to string index choices, with the same zero-based distribution passed to the shared evaluator.
+
+Results include `<model>.runtime.json`. Its configured pins and observed loaded backend/package metadata are distinct; a failed load records observed state as unknown. Provenance is also nested in JSON, serialized in CSV as `provenance_json`, and visible in Markdown and HTML details. The existing `version` field remains. Setup failures stop `all` before creating a run report; load and inference failures appear in the normal failure report.
+
+Dependencies and weights can require substantial disk and unified memory. Managed models still run sequentially. Runtime caches, model downloads, local environments, setup logs, and result files remain ignored by Git.

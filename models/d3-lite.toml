@@ -1,0 +1,17 @@
+id = "d3-lite"
+order = 60
+display_name = "d3-lite"
+endpoint = "http://127.0.0.1:18006/v1/systemone"
+profiles = ["extended"]
+runtime_model = "d3-lite"
+note = "ahmedandaloes/d3-lite-mlx pinned BF16; native decision readout."
+
+[setup]
+command = ["python3", "{root}/scripts/setup_runtime.py", "d3-lite"]
+
+[launch]
+command = ["{work}/envs/d3-clef/bin/python", "-m", "runtime_backends.bridge", "--model", "d3-lite", "--port", "18006"]
+env = { HF_HUB_OFFLINE = "1", TRANSFORMERS_OFFLINE = "1" }
+
+[version]
+command = ["git", "rev-parse", "HEAD"]

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -34,6 +34,7 @@ class ModelSpec:
     version: CommandSpec | None
     headers_env: dict[str, str]
     source: Path
+    provenance: dict = field(default_factory=dict)
 
     @property
     def managed(self) -> bool:
@@ -68,6 +69,17 @@ def _command(data: object, label: str) -> CommandSpec | None:
         cwd=Path(_expand(cwd)),
         env={k: _expand(v) for k, v in env.items()},
     )
+
+
+def _manifest_provenance(data: dict, path: Path, name: str) -> dict:
+    if "runtime_model" not in data:
+        return {}
+    from runtime_catalog import get_model
+
+    provenance = get_model(data["runtime_model"])
+    if provenance["id"] != name:
+        raise ValueError(f"{path}: runtime_model must match id")
+    return provenance
 
 
 def load_manifest(path: Path) -> ModelSpec:
@@ -123,6 +135,7 @@ def load_manifest(path: Path) -> ModelSpec:
         version=version,
         headers_env=headers_env,
         source=path,
+        provenance=_manifest_provenance(data, path, name),
     )
 
 

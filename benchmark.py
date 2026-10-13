@@ -7,6 +7,7 @@ from contextlib import contextmanager
 import csv
 from datetime import datetime, timezone
 import hashlib
+from html import escape
 import json
 import math
 import os
@@ -495,7 +496,8 @@ def run_one_model(
                 proc = subprocess.Popen(
                     command.argv,
                     cwd=command.cwd,
-                    env={**os.environ, **command.env},
+                    env={**os.environ, **command.env,
+                         "BENCH_RUNTIME_REPORT": str((out_dir / f"{spec.name}.runtime.json").resolve())},
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     start_new_session=True,
@@ -609,6 +611,7 @@ def run_one_model(
                 "model": spec.name,
                 "note": spec.note,
                 "version": model_version(spec),
+                "provenance": collect_provenance(spec, out_dir),
                 "adapter": spec.adapter,
                 "managed": spec.managed,
                 "requests": len(latencies),
@@ -636,22 +639,61 @@ def run_one_model(
             if reader is not None:
                 reader.join(timeout=5)
 
-def write_summary(
-    out_dir: Path, summaries: list[dict[str, Any]], metadata: dict[str, Any]
-) -> None:
+def collect_provenance(spec: ModelSpec, out_dir: Path) -> dict[str, Any]:
+    """Retain configured pins even if a managed runtime fails before loading."""
+    report: dict[str, Any] = {
+        "configured": spec.provenance,
+        "status": "unreported",
+        "observed": {"state": "unknown"},
+    }
+    path = out_dir / f"{spec.name}.runtime.json"
+    if path.exists():
+        try:
+            observed = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(observed, dict) or not isinstance(observed.get("observed"), dict):
+                raise ValueError("invalid runtime report")
+            report.update(observed)
+            report["configured"] = spec.provenance
+        except (OSError, ValueError) as exc:
+            report["report_error"] = type(exc).__name__
+    return report
+
+
+def write_summary_csv(path: Path, summaries: list[dict[str, Any]]) -> None:
     fields = [
-        "model", "version", "adapter", "managed", "requests", "decisions",
+        "model", "version", "provenance_json", "adapter", "managed", "requests", "decisions",
         "startup_to_port_ms", "first_request_ms",
         "p50_ms", "p95_ms", "p99_ms", "mean_ms", "cached_p50_ms", "cached_p95_ms",
         "server_reported_p50_ms", "peak_process_tree_rss_mb", "accuracy",
         "brier_mean", "ece_10bin", "coverage_at_1pct_error",
         "coverage_at_5pct_error", "errors", "note",
     ]
-    with (out_dir / "summary.csv").open("w", newline="", encoding="utf-8") as f:
+    with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         for row in summaries:
-            w.writerow({k: row.get(k) for k in fields})
+            csv_row = {k: row.get(k) for k in fields}
+            csv_row["provenance_json"] = json.dumps(row.get("provenance", {}), sort_keys=True)
+            w.writerow(csv_row)
+
+
+def provenance_markdown(summaries: list[dict[str, Any]]) -> list[str]:
+    lines = ["", "## Model provenance", ""]
+    for row in summaries:
+        if row.get("provenance"):
+            details = json.dumps(row["provenance"], sort_keys=True, ensure_ascii=False)
+            lines.append(
+                f"<details><summary>{escape(row['model'])} provenance</summary>"
+                f"<pre>{escape(details)}</pre></details>"
+            )
+
+    return lines
+
+
+def write_summary(
+    out_dir: Path, summaries: list[dict[str, Any]], metadata: dict[str, Any]
+) -> None:
+    write_summary_csv(out_dir / "summary.csv", summaries)
 
     (out_dir / "summary.json").write_text(
         json.dumps({"run": metadata, "models": summaries}, indent=2, ensure_ascii=False),
@@ -713,6 +755,8 @@ def write_summary(
     for i, r in enumerate(accuracy_rank, 1):
         lines.append(f"{i}. **{r['model']}** — {100*r['accuracy']:.1f}%")
 
+    lines += provenance_markdown(summaries)
+
     failed = [r for r in summaries if r.get("errors")]
     if failed:
         lines += ["", "## Failures", ""]
@@ -745,7 +789,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     def add_selection(parser: argparse.ArgumentParser) -> None:
         add_registry(parser)
         group = parser.add_mutually_exclusive_group()
-        group.add_argument("--profile", choices=["light", "full"], default=None)
+        group.add_argument("--profile", choices=["light", "full", "extended"], default=None)
         group.add_argument("--models", nargs="+", metavar="ID")
 
     setup = sub.add_parser("setup", help="install selected managed models")
@@ -885,6 +929,7 @@ def run(args: argparse.Namespace, selected: list[ModelSpec]) -> int:
             summaries.append({
                 "model": spec.name,
                 "version": model_version(spec),
+                "provenance": collect_provenance(spec, out_dir),
                 "adapter": spec.adapter,
                 "managed": spec.managed,
                 "errors": error,

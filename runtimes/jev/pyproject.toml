@@ -1,0 +1,5 @@
+[project]
+name = "systemone-jev-runtime"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["mlx==0.32.3", "transformers==5.14.0", "mlx-vlm @ git+https://github.com/Lazarus-931/mlx-vlm.git@597941d0d4eb900f1d066eba8d89abf474c0dd42"]

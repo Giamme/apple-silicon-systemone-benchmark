@@ -3,7 +3,7 @@ order = 10
 display_name = "Laya"
 endpoint = "http://127.0.0.1:18001/v1/systemone"
 api_model = "english"
-profiles = ["light", "full"]
+profiles = ["light", "full", "extended"]
 note = "English checkpoint on MPS; one checkpoint resident."
 
 [setup]

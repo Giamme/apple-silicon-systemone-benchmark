@@ -2,7 +2,7 @@ id = "von"
 order = 20
 display_name = "Von"
 endpoint = "http://127.0.0.1:18002/v1/systemone"
-profiles = ["full"]
+profiles = ["full", "extended"]
 note = "Local checkpoint with MPS explicitly selected."
 
 [setup]

@@ -3,7 +3,7 @@ order = 40
 display_name = "Rizzo Flow"
 endpoint = "http://127.0.0.1:18004/v1/systemone"
 api_model = "rizzo-latest"
-profiles = ["full"]
+profiles = ["full", "extended"]
 note = "Rizzo Flow 4B Q4_K_M on llama.cpp Metal."
 
 [setup]

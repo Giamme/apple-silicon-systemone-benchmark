@@ -3,7 +3,7 @@ order = 30
 display_name = "Kev"
 endpoint = "http://127.0.0.1:18003/v1/systemone"
 api_model = "kev-latest"
-profiles = ["light", "full"]
+profiles = ["light", "full", "extended"]
 note = "Kev-0.8B on MLX."
 
 [setup]
