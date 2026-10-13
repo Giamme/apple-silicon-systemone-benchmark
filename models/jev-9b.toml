@@ -2,7 +2,7 @@ id = "jev-9b"
 order = 120
 display_name = "jev-9b"
 endpoint = "http://127.0.0.1:18012/v1/systemone"
-profiles = ["extended"]
+profiles = ["full", "extended"]
 runtime_model = "jev-9b"
 note = "nativ-community/JEV-9B-MLX-NVFP4 pinned NVFP4 backbone, BF16 readout, FP32 probability math; native decision readout."
 

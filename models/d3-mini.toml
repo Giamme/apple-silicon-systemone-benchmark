@@ -2,7 +2,7 @@ id = "d3-mini"
 order = 70
 display_name = "d3-mini"
 endpoint = "http://127.0.0.1:18007/v1/systemone"
-profiles = ["extended"]
+profiles = ["full", "extended"]
 runtime_model = "d3-mini"
 note = "ahmedandaloes/d3-mini-mlx pinned BF16; native decision readout."
 

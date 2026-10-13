@@ -1,6 +1,6 @@
 # Model and service definitions
 
-The benchmark loads `models/*.toml`, `models/local/*.toml`, and any directory passed with `--model-dir`. A local definition may also select `light` or `full`. Use `./benchmark.sh models validate path/to/model.toml` before running it.
+The benchmark loads `models/*.toml`, `models/local/*.toml`, and any directory passed with `--model-dir`. A local definition may also select `light`, `full`, or `extended`. Use `./benchmark.sh models validate path/to/model.toml` before running it.
 
 ## Manifest
 
@@ -10,7 +10,7 @@ display_name = "My Service"
 endpoint = "http://127.0.0.1:19001/v1/systemone"
 api_model = "my-model"              # optional
 adapter = "systemone"                # default
-profiles = []                        # or ["light"], ["full"]
+profiles = []                        # or ["light"], ["full", "extended"]
 order = 100                          # optional profile display order
 note = "Short description for the report"
 
@@ -55,7 +55,7 @@ For each model, check that the adapter sends the same state and question intent,
 
 ## Pinned built-in runtime bridge
 
-Built-in native readout manifests use `runtime_model = "<id>"` to attach the standard-library-only [catalog](runtime_catalog.py) recipe as configured provenance. This field must match the manifest ID. It does not import the backend during model listing or manifest validation. The new `extended` profile contains the original four and eight pinned native readout candidates; `full`, `light`, and default selection are unchanged.
+Built-in native readout manifests use `runtime_model = "<id>"` to attach the standard-library-only [catalog](runtime_catalog.py) recipe as configured provenance. This field must match the manifest ID. It does not import the backend during model listing or manifest validation. The default, `full`, and `extended` selections include all 12 built-in candidates: the original four and eight pinned native readout models. `light` selects Laya and Kev. Explicit `--models` selection is preserved; use `--models laya von kev rizzo` to run only the original four.
 
 Family modules expose `load_backend(spec: dict, snapshot_path: Path) -> backend`, with lazy ML imports. The backend provides `predict(state, questions)` returning `{"answers": {...}, "usage": {...}}` and an `observed_metadata` dictionary. The snapshot is local, complete, and pinned before launch. The shared bridge binds only `127.0.0.1` and opens the port only after loading succeeds. Before loading any of the eight new managed backends, it applies `mlx.core.set_cache_limit(256 * 1024**2)` to bound unused allocator buffers. This fixed 256 MiB soft limit leaves active memory limits and model tensors unchanged; cached buffers may temporarily exceed it until allocator reclamation. Configured provenance declares the budget, and observed provenance records application and the previous limit, including when subsequent backend loading fails. Failure to apply the policy fails startup without fallback. It forwards state and typed questions without expected labels and preserves the benchmark nonce in deterministic object-state serialization.
 

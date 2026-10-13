@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from benchmark import collect_provenance, selected_models
+from benchmark import collect_provenance
 from model_registry import load_models
 from runtime_catalog import MODELS, get_model
 from runtime_backends.bridge import handler_for, load_runtime
@@ -41,16 +41,6 @@ QUESTIONS = {
 def prediction() -> dict:
     return {'answers': {name: canonical_answer(question, [0.3, 0.7])
                         for name, question in QUESTIONS.items()}, 'usage': {'output_tokens': 0}}
-
-
-def test_exact_extended_membership_and_original_defaults() -> None:
-    models = load_models()
-    assert [s.name for s in selected_models(SimpleNamespace(models=None, profile='extended'), models)] == [
-        'laya', 'von', 'kev', 'rizzo', *MODELS,
-    ]
-    assert len(models) == 12
-    assert [s.name for s in selected_models(SimpleNamespace(models=None, profile=None), models)] == ['laya', 'von', 'kev', 'rizzo']
-    assert [s.name for s in selected_models(SimpleNamespace(models=None, profile='light'), models)] == ['laya', 'kev']
 
 
 def test_model_listing_and_manifest_validation_import_no_heavy_packages() -> None:

@@ -2,7 +2,7 @@
 
 An open-source benchmark for local decision models and compatible services on native Apple Silicon macOS. It compares the same labeled cases through a common decision interface, runs managed models one at a time, and produces an offline HTML dashboard with CSV, JSON, Markdown, and request-level records.
 
-The built-in candidates are Laya, Von, Kev 0.8B, and Rizzo Flow 4B Q4_K_M. A plain run uses the **full** profile (all four). The **light** profile runs Laya and Kev. Profiles choose models manually; the tool does not infer quality or compatibility from a chip generation. On machines with less unified memory, start with `light` if `full` cannot load every model.
+The built-in catalog contains 12 candidates: the original Laya, Von, Kev 0.8B, and Rizzo Flow 4B Q4_K_M, plus eight native decision models listed below. A plain run uses the **full** profile and selects all 12; **extended** selects the same catalog. The **light** profile runs Laya and Kev. Profiles choose models manually; the tool does not infer quality or compatibility from a chip generation. On machines with less unified memory, start with `light` if `full` cannot load every model.
 
 ## Requirements
 
@@ -26,6 +26,7 @@ For a smaller comparison or a specific set:
 ```bash
 ./benchmark.sh all --profile light
 ./benchmark.sh all --models laya kev
+./benchmark.sh all --models laya von kev rizzo  # original four only
 ```
 
 Setup and measurement can be separated:
@@ -100,7 +101,7 @@ This harness and its synthetic examples are Apache-2.0 licensed. Model weights a
 
 ## Extended native decision models
 
-The **extended** profile adds eight models to the original four without changing `full`, `light`, or the default selection:
+The default and **full** selections include the original four models and these eight native decision models. **Extended** selects the same 12 models, while **light** remains Laya and Kev:
 
 ```bash
 ./benchmark.sh setup --profile extended

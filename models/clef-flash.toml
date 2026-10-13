@@ -2,7 +2,7 @@ id = "clef-flash"
 order = 90
 display_name = "clef-flash"
 endpoint = "http://127.0.0.1:18009/v1/systemone"
-profiles = ["extended"]
+profiles = ["full", "extended"]
 runtime_model = "clef-flash"
 note = "mlx-community/clef-flash-4bit pinned INT4 backbone, BF16 head; native decision readout."
 

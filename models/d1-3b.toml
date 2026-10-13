@@ -2,7 +2,7 @@ id = "d1-3b"
 order = 100
 display_name = "d1-3b"
 endpoint = "http://127.0.0.1:18010/v1/systemone"
-profiles = ["extended"]
+profiles = ["full", "extended"]
 runtime_model = "d1-3b"
 note = "LiquidAI/d1-3B-MLX-fp16 pinned FP16; native decision readout."
 

@@ -14,6 +14,7 @@ from adapters import load_adapter
 from benchmark import (
     check_answers,
     load_jsonl,
+    parse_args,
     run,
     run_one_model,
     selected_models,
@@ -89,12 +90,34 @@ def test_dataset_validation_reports_line_and_duplicate(tmp_path: Path) -> None:
         load_jsonl(dataset)
 
 
-def test_profiles_and_manifest_examples() -> None:
+@pytest.mark.parametrize(
+    ('arguments', 'expected_ids'),
+    [
+        ([], None),
+        (['--profile', 'full'], None),
+        (['--profile', 'extended'], None),
+        (['--profile', 'light'], ['laya', 'kev']),
+        (['--models', 'jev-9b', 'laya'], ['jev-9b', 'laya']),
+    ],
+    ids=['default', 'full', 'extended', 'light', 'explicit-model-order'],
+)
+def test_cli_model_selection_contract(arguments: list[str], expected_ids: list[str] | None) -> None:
     specs = load_models()
-    full = selected_models(SimpleNamespace(models=None, profile=None), specs)
-    light = selected_models(SimpleNamespace(models=None, profile="light"), specs)
-    assert [item.name for item in full] == ["laya", "von", "kev", "rizzo"]
-    assert [item.name for item in light] == ["laya", "kev"]
+    args = parse_args(['all', *arguments])
+    selected = selected_models(args, specs)
+    if expected_ids is None:
+        builtins = [load_manifest(path) for path in Path('models').glob('*.toml')]
+        builtin_ids = {spec.name for spec in builtins}
+        actual_ids = {spec.name for spec in selected}
+        assert builtin_ids <= actual_ids, f'Missing built-in models: {sorted(builtin_ids - actual_ids)}'
+        selected_builtins = [spec.name for spec in selected if spec.name in builtin_ids]
+        expected_ids = [spec.name for spec in sorted(builtins, key=lambda spec: (spec.order, spec.name))]
+        assert selected_builtins == expected_ids
+    else:
+        assert [spec.name for spec in selected] == expected_ids
+
+
+def test_manifest_example_adapter() -> None:
     example = load_manifest(Path("examples/custom_service.toml"))
     assert example.launch is None
     adapter = load_adapter(example.adapter)
