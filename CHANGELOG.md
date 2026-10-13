@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow the format `{major}.{minor}` ([...] parts appear only when non-zero).
 
+## [0.3] - 2026-10-13
+
+The full profile and default selection now include all 12 built-in System One models.
+
+### Fixed
+
+- The full profile and the default setup, run, and all commands include all 12 built-in models. Extended selects the same catalog; light remains Laya and Kev, and --models still selects an explicit subset.
+
 ## [0.2] - 2026-10-13
 
 Benchmark eight additional System One models through the extended profile, with pinned native runtimes and provenance recorded in every report format.
