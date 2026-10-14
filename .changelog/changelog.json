@@ -1,6 +1,53 @@
 {
   "versions": [
     {
+      "version": "0.4",
+      "date": "2026-10-14",
+      "summary": "A stuck model no longer costs you the whole run: skip, abort, exclude or resume without losing finished results, follow everything in a new terminal dashboard, and Von no longer hangs on its first request.",
+      "entries": [
+        {
+          "type": "added",
+          "text": "A model with a problem no longer costs you the whole run. Press Ctrl+C once to skip the current model, or twice to abort and still get a report for everything that finished. Reports are saved after every model, `--exclude` leaves models out of a profile, and `--resume results/<run>` reruns only the failed, skipped and unfinished models of an earlier run.",
+          "breaking": false,
+          "audience": "user",
+          "highlight": false,
+          "commits": [
+            "b859ade"
+          ]
+        },
+        {
+          "type": "added",
+          "text": "Running `./benchmark.sh` in a terminal opens an interactive dashboard. Pick the models and options, then follow the full log next to tabs for live progress, latency and quality charts, and results. Keys skip a stuck model, remove queued ones, abort, retry unfinished models, and open the report. `./benchmark.sh all` keeps the plain command-line run.",
+          "breaking": false,
+          "audience": "user",
+          "highlight": false,
+          "commits": [
+            "7b459a5"
+          ]
+        },
+        {
+          "type": "changed",
+          "text": "`all` now sets up each model just before benchmarking it, and a setup failure is reported for that model instead of stopping the run. The command exits 1 when any model failed or was skipped and 130 when the run was aborted.",
+          "breaking": false,
+          "audience": "user",
+          "highlight": false,
+          "commits": [
+            "b859ade"
+          ]
+        },
+        {
+          "type": "fixed",
+          "text": "Von no longer hangs on its first request. Its setup now downloads the model weights, and benchmark runs load them with Hugging Face networking turned off, so a slow or offline network can no longer stall a full run.",
+          "breaking": false,
+          "audience": "user",
+          "highlight": false,
+          "commits": [
+            "172fe62"
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.3",
       "date": "2026-10-13",
       "summary": "The full profile and default selection now include all 12 built-in System One models.",
