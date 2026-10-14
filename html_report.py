@@ -2,10 +2,29 @@
 from __future__ import annotations
 
 import json
+import os
 
 from html import escape
 from pathlib import Path
 from typing import Any
+
+
+def row_status(row: dict[str, Any]) -> str:
+    """ok, failed or skipped; rows written before statuses existed fall back to errors."""
+    return row.get("status") or ("failed" if row.get("errors") else "ok")
+
+
+def not_run(rows: list[dict[str, Any]], run: dict[str, Any]) -> list[str]:
+    """Selected models with no result row: removed from the queue or cut off by an abort."""
+    done = {row.get("model") for row in rows}
+    return [name for name in run.get("models", []) if name not in done]
+
+
+def write_text_atomic(path: Path, text: str) -> None:
+    """Replace a report in one step so an interrupted write never leaves half a file."""
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(text, encoding="utf-8")
+    os.replace(temporary, path)
 
 
 def _text(value: Any) -> str:
@@ -84,8 +103,11 @@ def _accuracy_chart(valid: list[dict[str, Any]]) -> str:
 def _table_rows(rows: list[dict[str, Any]]) -> str:
     out = []
     for row in rows:
-        error = row.get("errors")
-        status = '<span class="status error">Failed</span>' if error else '<span class="status ok">Complete</span>'
+        status = {
+            "ok": '<span class="status ok">Complete</span>',
+            "failed": '<span class="status error">Failed</span>',
+            "skipped": '<span class="status skip">Skipped</span>',
+        }[row_status(row)]
         cells = [
             f'<th scope="row">{_text(row["model"])}</th>',
             f"<td>{status}</td>",
@@ -127,6 +149,11 @@ def _details(rows: list[dict[str, Any]]) -> str:
             '<p class="failure"><strong>Run failed:</strong> ' + _text(row["errors"]) + "</p>"
             if row.get("errors") else ""
         )
+        if row_status(row) == "skipped":
+            error = (
+                '<p class="failure skip"><strong>Skipped:</strong> '
+                + _text(row.get("skip_reason") or "skipped") + "</p>"
+            )
         blocks.append(
             '<details class="model-detail"><summary><span>'
             + _text(row["model"])
@@ -143,7 +170,7 @@ def _details(rows: list[dict[str, Any]]) -> str:
 
 
 CSS = """
-:root{color-scheme:light;--paper:#f4f5f1;--surface:#fff;--ink:#17212c;--muted:#526170;--line:#cdd8db;--teal:#087f75;--teal-soft:#d6eee8;--blue:#335a9e;--blue-soft:#dce7fa;--red:#a52833;--red-soft:#fff0f0}
+:root{color-scheme:light;--paper:#f4f5f1;--surface:#fff;--ink:#17212c;--muted:#526170;--line:#cdd8db;--teal:#087f75;--teal-soft:#d6eee8;--blue:#335a9e;--blue-soft:#dce7fa;--red:#a52833;--red-soft:#fff0f0;--amber:#7a4b00;--amber-soft:#fdf0d5}
 *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}figure{margin:0}
 main{max-width:1160px;margin:auto;padding:36px 26px 80px}
 h1{font-size:clamp(2.2rem,5vw,4.6rem);line-height:1.06;letter-spacing:-.035em;max-width:850px;margin:0 0 18px}
@@ -156,8 +183,8 @@ p{margin:0 0 14px}.lede{font-size:1.1rem;color:var(--muted);max-width:820px}
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:38px}.panel{padding:22px;min-width:0}.panel h3{margin-bottom:6px}.panel .subtle{font-size:.85rem;color:var(--muted);margin-bottom:22px}
 .bar-row{display:grid;grid-template-columns:72px minmax(0,1fr) 82px;gap:12px;align-items:center;margin:16px 0;font-variant-numeric:tabular-nums}.bar-name{overflow:hidden;text-overflow:ellipsis;font-weight:700}.bar-value{text-align:right;font-size:.83rem;font-weight:700}.bar-track{height:18px;background:#e9edf0;border-radius:4px;position:relative;overflow:hidden}.bar-p95,.bar-p50,.bar-accuracy{display:block;height:100%;position:absolute;left:0;top:0}.bar-p95{background:var(--blue-soft)}.bar-p50{background:var(--blue)}.bar-accuracy{background:var(--teal)}
 .legend{display:flex;gap:18px;font-size:.8rem;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px}.legend .p50:before{background:var(--blue)}.legend .p95:before{background:var(--blue-soft);border:1px solid var(--blue)}
-.table-wrap{overflow-x:auto;margin-bottom:36px;padding:8px}table{border-collapse:collapse;width:100%;min-width:800px;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:14px 16px;border-bottom:1px solid var(--line);white-space:nowrap}thead th{font-size:.77rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:#f8faf9}th:first-child,td:first-child{text-align:left}tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}.status{font-size:.75rem;font-weight:750;border-radius:100px;padding:4px 8px}.status.ok{background:var(--teal-soft);color:#065449}.status.error{background:var(--red-soft);color:var(--red)}
-.model-detail{margin:10px 0;overflow:hidden}.model-detail summary{cursor:pointer;padding:15px 20px;display:flex;justify-content:space-between;gap:18px;font-weight:750}.model-detail summary:hover{background:#f7faf9}.model-detail summary:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}.detail-hint{font-weight:500;color:var(--muted);font-size:.82rem}.detail-body{padding:0 20px 22px}.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0 0}.detail-grid div{border-top:1px solid var(--line);padding-top:8px;min-width:0}.detail-grid dt{font-size:.77rem;color:var(--muted)}.detail-grid dd{margin:2px 0 0;font-weight:700;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.failure,.notice{background:var(--red-soft);border-color:#efb9be;padding:14px 18px;color:#7d1c26}.notice{margin:0 0 32px}.empty{color:var(--muted);padding:12px 0}
+.table-wrap{overflow-x:auto;margin-bottom:36px;padding:8px}table{border-collapse:collapse;width:100%;min-width:800px;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:14px 16px;border-bottom:1px solid var(--line);white-space:nowrap}thead th{font-size:.77rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:#f8faf9}th:first-child,td:first-child{text-align:left}tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}.status{font-size:.75rem;font-weight:750;border-radius:100px;padding:4px 8px}.status.ok{background:var(--teal-soft);color:#065449}.status.error{background:var(--red-soft);color:var(--red)}.status.skip{background:var(--amber-soft);color:var(--amber)}
+.model-detail{margin:10px 0;overflow:hidden}.model-detail summary{cursor:pointer;padding:15px 20px;display:flex;justify-content:space-between;gap:18px;font-weight:750}.model-detail summary:hover{background:#f7faf9}.model-detail summary:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}.detail-hint{font-weight:500;color:var(--muted);font-size:.82rem}.detail-body{padding:0 20px 22px}.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0 0}.detail-grid div{border-top:1px solid var(--line);padding-top:8px;min-width:0}.detail-grid dt{font-size:.77rem;color:var(--muted)}.detail-grid dd{margin:2px 0 0;font-weight:700;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.failure,.notice{background:var(--red-soft);border-color:#efb9be;padding:14px 18px;color:#7d1c26}.notice{margin:0 0 32px}.failure.skip{background:var(--amber-soft);border-color:#ecd08f;color:var(--amber)}.empty{color:var(--muted);padding:12px 0}
 .method{margin-top:38px;border-top:1px solid var(--line);padding-top:26px;color:var(--muted);font-size:.92rem}.method p{max-width:900px}.method strong{color:var(--ink)}code{background:#e8eeed;padding:1px 4px;border-radius:3px;overflow-wrap:anywhere}footer{border-top:1px solid var(--line);margin-top:34px;padding-top:18px;color:var(--muted);font-size:.82rem}
 @media(max-width:800px){main{padding:26px 16px 60px}.metric-grid,.chart-grid{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:580px){.metric-grid,.chart-grid,.detail-grid{grid-template-columns:1fr}.metric{min-height:110px}.bar-row{grid-template-columns:58px minmax(0,1fr) 72px;gap:8px}.section-heading{display:block}.detail-hint{display:none}}
@@ -166,8 +193,11 @@ p{margin:0 0 14px}.lede{font-size:1.1rem;color:var(--muted);max-width:820px}
 
 
 def write_html_report(path: Path, rows: list[dict[str, Any]], run: dict[str, Any]) -> None:
-    valid = [row for row in rows if not row.get("errors") and isinstance(row.get("p50_ms"), (int, float))]
-    failed = [row for row in rows if row.get("errors")]
+    valid = [row for row in rows if row_status(row) == "ok" and isinstance(row.get("p50_ms"), (int, float))]
+    failed = [row for row in rows if row_status(row) == "failed"]
+    skipped = [row for row in rows if row_status(row) == "skipped"]
+    missing = not_run(rows, run)
+    run_status = run.get("status", "complete")
     fastest = min(valid, key=lambda row: row["p50_ms"]) if valid else None
     scored = [row for row in valid if isinstance(row.get("accuracy"), (int, float))]
     most_accurate = max(scored, key=lambda row: row["accuracy"]) if scored else None
@@ -185,13 +215,25 @@ def write_html_report(path: Path, rows: list[dict[str, Any]], run: dict[str, Any
             most_accurate["model"] if most_accurate else "No labeled decisions",
         ),
         _metric("Dataset cases", str(dataset["cases"]), f"{dataset['questions']} labeled decisions"),
-        _metric("Models completed", f"{len(valid)} / {len(rows)}", f"{len(failed)} failed"),
+        _metric(
+            "Models completed",
+            f"{len(valid)} / {len(rows) + len(missing)}",
+            f"{len(failed)} failed · {len(skipped)} skipped",
+        ),
     ])
     warning = ""
-    if failed:
+    if failed or skipped or missing or run_status != "complete":
+        parts = [
+            f"{len(items)} {label}" for items, label in
+            ((failed, "failed"), (skipped, "skipped"), (missing, "not run")) if items
+        ]
+        reason = {
+            "aborted": " (run aborted)",
+            "running": " (run in progress or interrupted)",
+        }.get(run_status, "")
         warning = (
             '<aside class="notice" role="status"><strong>Partial run.</strong> '
-            + _text(f"{len(failed)} model(s) failed. Details and logs are available below.")
+            + _text(f"{', '.join(parts) or 'No models finished'}{reason}. Details and logs are available below.")
             + "</aside>"
         )
     smoke = (
@@ -269,4 +311,4 @@ def write_html_report(path: Path, rows: list[dict[str, Any]], run: dict[str, Any
         "Model response logs and detailed CSV/JSON files stay in the run directory.</footer>"
         "</main></body></html>"
     )
-    path.write_text(page, encoding="utf-8")
+    write_text_atomic(path, page)

@@ -49,7 +49,7 @@ import sys
 from benchmark import main
 assert main(['models', 'list']) == 0
 assert main(['models', 'validate', 'models/jev-9b.toml']) == 0
-assert not any(name.split('.')[0] in {'mlx', 'mlx_vlm', 'transformers', 'numpy', 'torch'} for name in sys.modules)
+assert not any(name.split('.')[0] in {'mlx', 'mlx_vlm', 'transformers', 'numpy', 'torch', 'textual', 'rich'} for name in sys.modules)
 """
     subprocess.run([sys.executable, '-c', script], check=True, capture_output=True)
 

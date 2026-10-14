@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import platform
+import signal
 import socket
+import subprocess
 import sys
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import time
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,26 +25,14 @@ from benchmark import (
     system_info,
     write_summary,
 )
-from model_registry import CommandSpec, ModelSpec, load_manifest, load_models
+from fakes import CASE, Handler, serve, stuck_service, write_dataset, write_manifest
+from model_registry import ROOT, CommandSpec, ModelSpec, load_manifest, load_models
+from run_control import Session
 
 
-CASE = {
-    "id": "ticket-1",
-    "state": "The invoice was paid twice.",
-    "questions": {
-        "team": {
-            "type": "choice",
-            "instructions": "Which team?",
-            "criteria": {"billing": "Payments", "support": "Software"},
-        }
-    },
-    "expected": {"team": "billing"},
-}
-
-
-def make_spec(endpoint: str, launch: CommandSpec | None = None) -> ModelSpec:
+def make_spec(endpoint: str, launch: CommandSpec | None = None, name: str = "fake") -> ModelSpec:
     return ModelSpec(
-        name="fake",
+        name=name,
         display_name="Fake",
         endpoint=endpoint,
         api_model=None,
@@ -56,27 +48,12 @@ def make_spec(endpoint: str, launch: CommandSpec | None = None) -> ModelSpec:
     )
 
 
-class Handler(BaseHTTPRequestHandler):
-    def do_POST(self) -> None:
-        length = int(self.headers["Content-Length"])
-        payload = json.loads(self.rfile.read(length))
-        assert payload["questions"]["team"]["type"] == "choice"
-        body = json.dumps({
-            "answers": {
-                "team": {
-                    "choice": "billing",
-                    "probabilities": {"billing": 0.9, "support": 0.1},
-                }
-            }
-        }).encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, *_args: object) -> None:
-        pass
+def run_args(dataset: Path, output: Path | None, models: list[str], **overrides: object) -> SimpleNamespace:
+    return SimpleNamespace(**{
+        "action": "run", "dataset": dataset, "allow_remote": False, "passes": 1, "warmup": 0,
+        "cached_repeats": 0, "startup_timeout": 5, "first_request_timeout": 60,
+        "output": output, "models": models, "profile": None, **overrides,
+    })
 
 
 def test_dataset_validation_reports_line_and_duplicate(tmp_path: Path) -> None:
@@ -98,8 +75,10 @@ def test_dataset_validation_reports_line_and_duplicate(tmp_path: Path) -> None:
         (['--profile', 'extended'], None),
         (['--profile', 'light'], ['laya', 'kev']),
         (['--models', 'jev-9b', 'laya'], ['jev-9b', 'laya']),
+        (['--profile', 'light', '--exclude', 'kev'], ['laya']),
+        (['--models', 'jev-9b', 'laya', '--exclude', 'jev-9b'], ['laya']),
     ],
-    ids=['default', 'full', 'extended', 'light', 'explicit-model-order'],
+    ids=['default', 'full', 'extended', 'light', 'explicit-model-order', 'profile-exclude', 'models-exclude'],
 )
 def test_cli_model_selection_contract(arguments: list[str], expected_ids: list[str] | None) -> None:
     specs = load_models()
@@ -115,6 +94,19 @@ def test_cli_model_selection_contract(arguments: list[str], expected_ids: list[s
         assert selected_builtins == expected_ids
     else:
         assert [spec.name for spec in selected] == expected_ids
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (["--profile", "light", "--exclude", "nope"], "Unknown model.*--exclude"),
+        (["--profile", "light", "--exclude", "laya", "kev"], "No models left"),
+    ],
+    ids=["unknown-id", "nothing-left"],
+)
+def test_exclude_rejects_unknown_ids_and_an_empty_selection(arguments: list[str], message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        selected_models(parse_args(["all", *arguments]), load_models())
 
 
 def test_manifest_example_adapter() -> None:
@@ -245,3 +237,112 @@ def test_missing_decision_and_remote_endpoint_are_rejected(tmp_path: Path) -> No
     )
     with pytest.raises(ValueError, match="--allow-remote"):
         run(args, [spec])
+
+
+@pytest.mark.parametrize(
+    ("action", "exit_code", "statuses", "run_status"),
+    [
+        ("skip", 1, {"a": "ok", "b": "skipped", "c": "ok"}, "complete"),
+        ("abort", 130, {"a": "ok", "b": "skipped"}, "aborted"),
+    ],
+    ids=["skip-continues", "abort-keeps-finished"],
+)
+def test_stuck_first_request_can_be_skipped_or_aborted_with_a_report(
+    tmp_path: Path, action: str, exit_code: int, statuses: dict[str, str], run_status: str
+) -> None:
+    dataset = write_dataset(tmp_path)
+    session = Session()
+    result: list[int] = []
+    with serve(Handler) as fast, stuck_service() as stuck:
+        specs = [make_spec(fast, name="a"), make_spec(stuck.url, name="b"), make_spec(fast, name="c")]
+        args = run_args(dataset, tmp_path / "out", ["a", "b", "c"])
+        engine = threading.Thread(target=lambda: result.append(run(args, specs, session)), daemon=True)
+        engine.start()
+        assert stuck.wait_for_request()
+        # The report already covers the finished model while b is stuck.
+        saved = json.loads((args.output / "summary.json").read_text())
+        assert saved["run"]["status"] == "running"
+        assert [(row["model"], row["status"]) for row in saved["models"]] == [("a", "ok")]
+        requested = time.monotonic()
+        if action == "skip":
+            assert session.control.skip("b")
+        else:
+            session.control.abort()
+        engine.join(timeout=10)
+        assert time.monotonic() - requested < 5  # the first-request timeout is 60 s
+    assert result == [exit_code]
+    report = json.loads((args.output / "summary.json").read_text())
+    assert report["run"]["status"] == run_status
+    assert {row["model"]: row["status"] for row in report["models"]} == statuses
+    skipped = next(row for row in report["models"] if row["model"] == "b")
+    assert "first request" in skipped["skip_reason"]
+    assert "Partial run" in (args.output / "summary.html").read_text()
+
+
+def test_resume_reruns_only_unfinished_models_and_refuses_changed_settings(tmp_path: Path) -> None:
+    dataset = write_dataset(tmp_path)
+    hits: list[str] = []
+
+    class Counting(Handler):
+        def do_POST(self) -> None:
+            hits.append(self.path)
+            super().do_POST()
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        dead = f"http://127.0.0.1:{probe.getsockname()[1]}/v1/systemone"
+    with serve(Counting) as counted, serve(Handler) as fresh:
+        out = tmp_path / "out"
+        first = run_args(dataset, out, ["a", "b"], first_request_timeout=1)
+        assert run(first, [make_spec(counted, name="a"), make_spec(dead, name="b")]) == 1
+        created_at = json.loads((out / "summary.json").read_text())["run"]["created_at"]
+        hits.clear()
+        resumed = run_args(dataset, None, ["a", "b"], resume=out)
+        assert run(resumed, [make_spec(counted, name="a"), make_spec(fresh, name="b")]) == 0
+        assert hits == []
+        changed = run_args(dataset, None, ["a", "b"], resume=out, passes=2)
+        with pytest.raises(ValueError, match="--passes 1"):
+            run(changed, [make_spec(counted, name="a"), make_spec(fresh, name="b")])
+    report = json.loads((out / "summary.json").read_text())
+    assert {row["model"]: row["status"] for row in report["models"]} == {"a": "ok", "b": "ok"}
+    assert report["run"]["created_at"] == created_at
+    assert len(report["run"]["resumed_at"]) == 1
+
+
+@pytest.mark.skipif(
+    platform.system() != "Darwin" or platform.machine() != "arm64",
+    reason="the benchmark CLI only runs natively on Apple Silicon",
+)
+@pytest.mark.parametrize(
+    ("models", "interrupts", "exit_code", "statuses"),
+    [
+        (["stuck", "fast"], 1, 1, {"stuck": "skipped", "fast": "ok"}),
+        (["stuck", "stuck2"], 2, 130, {"stuck": "skipped", "stuck2": "skipped"}),
+    ],
+    ids=["once-skips", "twice-aborts"],
+)
+def test_ctrl_c_skips_the_current_model_and_twice_aborts(
+    tmp_path: Path, models: list[str], interrupts: int, exit_code: int, statuses: dict[str, str]
+) -> None:
+    dataset = write_dataset(tmp_path)
+    out = tmp_path / "out"
+    with serve(Handler) as fast, stuck_service() as stuck:
+        for name in ("stuck", "stuck2"):
+            write_manifest(tmp_path / "models", name, stuck.url)
+        write_manifest(tmp_path / "models", "fast", fast)
+        proc = subprocess.Popen(
+            [sys.executable, "benchmark.py", "run", "--model-dir", str(tmp_path / "models"),
+             "--models", *models, "--dataset", str(dataset), "--passes", "1", "--warmup", "0",
+             "--cached-repeats", "0", "--output", str(out)],
+            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        try:
+            for _ in range(interrupts):
+                assert stuck.wait_for_request()
+                proc.send_signal(signal.SIGINT)
+            output, _ = proc.communicate(timeout=30)
+        finally:
+            proc.kill()
+    assert proc.returncode == exit_code, output
+    report = json.loads((out / "summary.json").read_text())
+    assert {row["model"]: row["status"] for row in report["models"]} == statuses

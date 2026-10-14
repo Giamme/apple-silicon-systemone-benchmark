@@ -19,7 +19,7 @@ The benchmark harness itself uses only the Python standard library. Model packag
 ./benchmark.sh all
 ```
 
-This validates the included synthetic dataset, sets up the full profile, starts each model in turn, prints prefixed server logs and request progress, and writes a new run under `results/`. Open `summary.html` in that run directory.
+This validates the included synthetic dataset, then sets up and benchmarks each model of the full profile in turn, printing prefixed server logs and request progress. It writes a new run under `results/`. Open `summary.html` in that run directory.
 
 For a smaller comparison or a specific set:
 
@@ -27,6 +27,12 @@ For a smaller comparison or a specific set:
 ./benchmark.sh all --profile light
 ./benchmark.sh all --models laya kev
 ./benchmark.sh all --models laya von kev rizzo  # original four only
+```
+
+Leave models out of a profile with `--exclude`:
+
+```bash
+./benchmark.sh all --exclude von rizzo
 ```
 
 Setup and measurement can be separated:
@@ -37,6 +43,25 @@ Setup and measurement can be separated:
 ```
 
 The full profile is the default for `setup`, `run`, and `all`. `--models` overrides the profile. `./benchmark.sh models list` shows installed definitions and profile membership. Setup updates upstream packages or repositories; every run records the versions or commits it could read.
+
+## Skip, abort, exclude and resume
+
+One model with a problem no longer costs you the whole run:
+
+- **Skip.** In the command-line run, press `Ctrl+C` once to skip the current model at any stage (setup, launch, first request or measurement). Its server is stopped, it is marked as skipped in the report, and the next model starts.
+- **Abort.** Press `Ctrl+C` twice within three seconds. The current model is stopped, queued models are not run, and the report is written for everything that finished. A third `Ctrl+C` kills the model servers and exits at once.
+- **Saved as you go.** The report files are rewritten after every model, so even a killed run leaves a usable `summary.html`.
+- **Exclude.** `--exclude ID ...` removes models from `--profile` or `--models`.
+- **Resume.** `--resume results/<run>` reruns the failed, skipped and unfinished models of that run into the same directory and keeps the finished results. Passes, warmup, cached repeats, the dataset (by SHA-256) and the hardware must match; options you leave out are taken from that run. Runs created before this version cannot be resumed.
+
+```bash
+./benchmark.sh run --resume results/20261014-003309-941534
+./benchmark.sh run --resume results/20261014-003309-941534 --exclude von
+```
+
+The command exits `0` when every model finished, `1` when any failed or was skipped, `130` when the run was aborted, and `2` for invalid options. A model whose server prints nothing for a minute during launch or its first request gets a "no server output" hint in its progress line.
+
+Skipping an existing (not benchmark-managed) service stops waiting for its in-flight request, but cannot stop the service itself. If you retry it right away, its first latencies can include that leftover work. If the benchmark process itself is killed with `SIGKILL`, managed model servers keep running; every other exit stops them.
 
 ## Test a new dataset
 
@@ -73,7 +98,7 @@ results/<timestamp>/
 └── <model>.decisions.jsonl
 ```
 
-The terminal displays setup/startup, cold first request, warmup, measurement counts and rolling p50, cached repeats, and model-prefixed server output. Server logs remain in the run directory; setup logs are under `.bench/`. Existing services have request progress but no server output, startup time, or comparable process-memory measurement. A failed model still appears in the report, and the command exits nonzero.
+The terminal displays setup/startup, cold first request, warmup, measurement counts and rolling p50, cached repeats, and model-prefixed server output. Server logs remain in the run directory; setup logs are under `.bench/`. Existing services have request progress but no server output, startup time, or comparable process-memory measurement. A failed or skipped model still appears in the report with its reason (`status` is `ok`, `failed` or `skipped`; CSV and JSON add `errors` and `skip_reason`), models that never ran are listed separately, and the command exits nonzero.
 
 Warm p50/p95/p99 are end-to-end HTTP latency after warmup. Each primary request carries a unique, decision-irrelevant ID to reduce repeated-prefix cache effects. Cached latency repeats one identical input separately. Accuracy, Brier score, ECE, and error-budget coverage use the labeled answers. Process-tree RSS is a host-memory proxy, not a Metal allocation measurement.
 
@@ -126,6 +151,6 @@ These models use native decision readouts through a foreground loopback `/v1/sys
 
 Von's setup also downloads its weights (`wfzyx/von`) into the Hugging Face cache, and benchmark launches load them with Hub networking disabled. A missing download fails quickly with Von's own error instead of retrying inside the first request.
 
-Results include `<model>.runtime.json`. Its configured pins and observed loaded backend/package metadata are distinct; a failed load records observed state as unknown. Provenance is also nested in JSON, serialized in CSV as `provenance_json`, and visible in Markdown and HTML details. The existing `version` field remains. Setup failures stop `all` before creating a run report; load and inference failures appear in the normal failure report.
+Results include `<model>.runtime.json`. Its configured pins and observed loaded backend/package metadata are distinct; a failed load records observed state as unknown. Provenance is also nested in JSON, serialized in CSV as `provenance_json`, and visible in Markdown and HTML details. The existing `version` field remains. In `all`, each model is set up just before it runs; a setup, load or inference failure is reported for that model and the run continues with the next one.
 
 Dependencies and weights can require substantial disk and unified memory. Managed models still run sequentially. Runtime caches, model downloads, local environments, setup logs, and result files remain ignored by Git.
