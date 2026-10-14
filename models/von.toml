@@ -10,6 +10,7 @@ command = ["bash", "{root}/scripts/setup_model.sh", "von"]
 
 [launch]
 command = ["{work}/envs/von/bin/von", "serve", "--host", "127.0.0.1", "--port", "18002", "--device", "mps"]
+env = { HF_HUB_OFFLINE = "1", TRANSFORMERS_OFFLINE = "1" }
 
 [version]
 command = ["{work}/envs/von/bin/python", "-c", "import importlib.metadata as m; print(m.version('von-sdk'))"]

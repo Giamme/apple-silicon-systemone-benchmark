@@ -20,6 +20,10 @@ case "$MODEL" in
       uv venv --python 3.12 "$WORK/envs/von"
     fi
     uv pip install --python "$WORK/envs/von/bin/python" --upgrade von-sdk
+    # Von otherwise downloads its weights silently on the first request; cache them
+    # now so benchmark launches can disable Hugging Face networking.
+    HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 "$WORK/envs/von/bin/python" -c \
+      'from huggingface_hub import snapshot_download; print("von weights:", snapshot_download(repo_id="wfzyx/von", allow_patterns=["*.json", "*.safetensors", "*.pt"]))'
     ;;
   kev)
     command -v git >/dev/null 2>&1 || { echo "git is required." >&2; exit 1; }
