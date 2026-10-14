@@ -11,9 +11,15 @@ The built-in catalog contains 12 candidates: the original Laya, Von, Kev 0.8B, a
 - Python 3.11+ (or `uv`, which the launcher can use to obtain Python 3.12)
 - Several gigabytes of disk space for downloaded environments and weights
 
-The benchmark harness itself uses only the Python standard library. Model packages and weights download from their own upstream projects and keep their own licenses; see [THIRD_PARTY.md](THIRD_PARTY.md). This project is independent of those projects and of TypeSafe Jev.
+The benchmark harness and its command-line interface use only the Python standard library. The optional interactive dashboard runs through `uv` with a pinned Textual (`textual==8.2.8`), which uv downloads once into its own cache. Model packages and weights download from their own upstream projects and keep their own licenses; see [THIRD_PARTY.md](THIRD_PARTY.md). This project is independent of those projects and of TypeSafe Jev.
 
 ## Start a benchmark
+
+```bash
+./benchmark.sh
+```
+
+In a terminal, this opens the interactive dashboard (see [below](#interactive-dashboard)). Choose a profile, untick any models you want to leave out, and start. For the plain command-line run, which scripts and CI also get when there is no terminal:
 
 ```bash
 ./benchmark.sh all
@@ -44,11 +50,34 @@ Setup and measurement can be separated:
 
 The full profile is the default for `setup`, `run`, and `all`. `--models` overrides the profile. `./benchmark.sh models list` shows installed definitions and profile membership. Setup updates upstream packages or repositories; every run records the versions or commits it could read.
 
+## Interactive dashboard
+
+`./benchmark.sh` (or `./benchmark.sh tui`) opens a terminal dashboard. The start screen lists every model with a profile preset, the dataset, the pass and warmup counts, whether to run setup before each model, and earlier runs you can resume. To start immediately with command-line options, pass them after `tui`, for example `./benchmark.sh tui all --profile full --exclude von`.
+
+During a run, the full log of setup, server and benchmark output fills the left side. The right side has four tabs:
+
+- **Progress**: the model queue with status, stage, elapsed time, request progress, p50 and accuracy. Below it, the current model's stage, a progress bar and a live latency sparkline. A model that has printed nothing for a minute shows a hint to skip it.
+- **Latency**: warm p50/p95 and cached p50 bars for finished models.
+- **Quality**: accuracy, error-budget coverage, ECE and Brier score bars.
+- **Results**: the summary table, failure and skip reasons, and the report path.
+
+| Key | Action |
+| --- | --- |
+| `s` | Skip the running model (after a confirmation). Its server is stopped and the run moves on. |
+| `x` | Remove the highlighted queued model before it starts. |
+| `a` | Abort the run. The report is still written for the models that finished. |
+| `r` | After the run, retry failed, skipped and unfinished models into the same report. |
+| `o` | Open `summary.html`. |
+| `f` / `l` | Pause or follow the log; filter it to the current or highlighted model. |
+| `q` / `Ctrl+C` | Quit. During a run, this aborts first; press again to force-quit. |
+
+Below 110 columns the log moves above the tabs. If the dashboard cannot start (no `uv`, or no terminal), use `./benchmark.sh all`.
+
 ## Skip, abort, exclude and resume
 
 One model with a problem no longer costs you the whole run:
 
-- **Skip.** In the command-line run, press `Ctrl+C` once to skip the current model at any stage (setup, launch, first request or measurement). Its server is stopped, it is marked as skipped in the report, and the next model starts.
+- **Skip.** In the command-line run, press `Ctrl+C` once to skip the current model at any stage (setup, launch, first request or measurement). Its server is stopped, it is marked as skipped in the report, and the next model starts. The dashboard uses `s`.
 - **Abort.** Press `Ctrl+C` twice within three seconds. The current model is stopped, queued models are not run, and the report is written for everything that finished. A third `Ctrl+C` kills the model servers and exits at once.
 - **Saved as you go.** The report files are rewritten after every model, so even a killed run leaves a usable `summary.html`.
 - **Exclude.** `--exclude ID ...` removes models from `--profile` or `--models`.
